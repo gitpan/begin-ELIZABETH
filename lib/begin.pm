@@ -3,7 +3,7 @@ package begin;
 # Make sure we have version info for this module
 # Be strict from now on
 
-$VERSION = '0.01';
+$VERSION = '0.02';
 use strict;
 
 # The flag to take all =begin CAPITALS pod sections
@@ -43,6 +43,7 @@ unshift( @INC,sub {
             my $out = IO::File->new_tmpfile
              or die "Failed to create temporry file for '$path': $!\n";
 
+#   Make sure we have our own $_
 #   While there are lines to be read
 #    If we're inside an active sequence
 #     Checks if we're at the end and adapts and resets flag if so
@@ -52,12 +53,13 @@ unshift( @INC,sub {
 #   Close the input file
 #   Make sure the action section flag is reset
 
+            local $_;
             while (<$in>) {
                 if ($INSIDE) {
-                    $INSIDE = !s/^=cut\s*/}/;
+                    $INSIDE = !s#^=cut#}#;
                 } else {
-                    s/^=begin\s+([A-Z_0-9]+)\s*/
-                     ($INSIDE = $ALL || $ENV{$1}) ? '{' : "=begin $1"/e
+                    s#^=begin\s+([A-Z_0-9]+)#
+                     ($INSIDE = $ALL || $ENV{$1}) ? "{" : "=begin $1"#e;
                 }
                 print $out $_;
             }
@@ -129,10 +131,10 @@ sub import {
     Filter::Util::Call::filter_add( sub {
         if (($STATUS = Filter::Util::Call::filter_read()) > 0) {
             if ($INSIDE) {
-                $INSIDE = !s/^=cut\s*/}/;
+                $INSIDE = !s#^=cut*#}#;
             } else {
-                s/^=begin\s+([A-Z_0-9]+)\s*/
-                 ($INSIDE = $ALL || $ENV{$1}) ? '{' : "=begin $1"/e
+                s#^=begin\s+([A-Z_0-9]+)#
+                 ($INSIDE = $ALL || $ENV{$1}) ? '{' : "=begin $1"#e;
             }
         }
         $STATUS;
@@ -195,6 +197,45 @@ skipping =pod sections).
 To prevent interference with other pod handlers, the name of the pod handler
 B<must> be in uppercase.
 
+If a =begin pod section is considered for replacement, then a scope is
+created around that pod section so that there is no interference with any
+of the code around it.  For example:
+
+ my $foo = 2;
+
+ =begin DEBUGGING
+
+ my $foo = 1;
+ warn "debug foo = $foo\n";
+
+ =cut
+
+ warn "normal foo = $foo\n";
+
+is converted on the fly (before Perl compiles it) to:
+
+ my $foo = 2;
+
+ {
+
+ my $foo = 1;
+ warn "foo = $foo\n";
+
+ }
+
+ warn "normal foo = $foo\n";
+
+But of course, this happens B<only> if the "begin" pragma is loaded B<and>
+the environment variable B<DEBUGGING> is set.
+
+=head1 WHY?
+
+One day, I finally had enough of always putting in and taking out debug
+statements from modules I was developing.  I figured there had to be a
+better way to do this.  Now, this module allows to leave debugging code
+inside your programs and only have them come alive when I<you> want them
+to be alive.  I<Without any run-time penalties when you're in production>.
+
 =head1 REQUIRED MODULES
 
  Filter::Util::Call (any)
@@ -202,14 +243,15 @@ B<must> be in uppercase.
 
 =head1 IMPLEMENTATION
 
-This version is completely written in Perl.  It uses a globally installed
-source filter to provide its magic.  Because the =begin pod directive is
+This version is completely written in Perl.  It uses a source filter to
+provide its magic to the script being run B<and> an @INC handler for all
+of the modules that are loaded otherwise.  Because the =begin pod directive is
 ignored by Perl during normal compilation, the source filter is B<not> needed
 for production use so there will be B<no> performance penalty in that case.
 
 =head1 CAVEATS
 
-=head2 Source filter
+=head2 Overhead during development
 
 Because the "begin" pragma uses a source filter for the invoked script, and
 an @INC handler for all further required files, there is an inherent overhead
@@ -219,7 +261,7 @@ overhead).
 
 =head2 No nesting allowed
 
-Out of performance reasons, the source filter is kept as simple as possible.
+Out of performance reasons, the filters are kept as simple as possible.
 This is done by keeping only a single flag to mark whether the filter is
 inside a =begin section with code to be activated.  For this reason, no nesting
 of =begin sections are supported.  And there is also no check for it, so if
@@ -231,6 +273,12 @@ Since the "begin" pragma performs all of this magic at compile time, it
 generally does not make sense to change the values of applicable environment
 variables at execution, as there will be no compiled code available to
 activate.
+
+=head2 Modules that use AutoLoader, SelfLoader, load, etc.
+
+For the moment, these modules bypass the mechanism of this module.  An
+interface with load.pm is on the TODO list.  Patches for other autoloading
+modules are welcomed.
 
 =head1 AUTHOR
 

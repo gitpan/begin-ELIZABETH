@@ -32,6 +32,8 @@ print "within verbose: $foo\n";
 
 =cut
 print "after sections: $foo\n";
+shift( @INC ) if ref $INC[0];
+print "@INC\n";
 EOD
 ok( close( $handle ),"Close script: $! " );
 
@@ -68,6 +70,8 @@ print "within verbose: $foo\n";
 
 =cut
 print "after sections: $foo\n";
+shift( @INC ) if ref $INC[0];
+print "@INC\n";
 EOD
 ok( close( $handle ),"Close module: $! " );
 
@@ -87,6 +91,7 @@ sub do_tests {
 before sections: foo
 between sections: foo
 after sections: foo
+$INC[-1] @INC
 EOD
     ok( close( $handle ),"Verify closing of pipe: $!" );
 
@@ -98,6 +103,7 @@ before sections: foo
 within debugging: bar
 between sections: foo
 after sections: foo
+$INC[-1] @INC
 EOD
         ok( close( $handle ),"Verify closing of pipe: $!" );
     }
@@ -111,6 +117,7 @@ within debugging: bar
 between sections: foo
 within verbose: baz
 after sections: foo
+$INC[-1] @INC
 EOD
         ok( close( $handle ),"Verify closing of pipe: $!" );
     }
@@ -123,6 +130,7 @@ before sections: foo
 between sections: foo
 within verbose: baz
 after sections: foo
+$INC[-1] @INC
 EOD
     ok( close( $handle ),"Verify closing of pipe: $!" );
     $ENV{'VERBOSE'} = 0;
